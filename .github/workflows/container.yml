@@ -59,8 +59,11 @@ jobs:
           echo "Status for an incomplete body: $code"
           test "$code" = "400"
 
+      # Pinned to the commit behind v0.36.0, not to a tag. In March 2026 attackers
+      # force pushed most of this action's version tags to malware, and a commit
+      # SHA cannot be moved the way a tag can.
       - name: Scan the image for known vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: iris-classifier:ci
           severity: CRITICAL,HIGH
