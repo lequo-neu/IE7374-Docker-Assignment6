@@ -1,0 +1,82 @@
+name: Container build, test, scan and publish
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/lequo-neu/ie7374-docker-assignment6
+
+jobs:
+  container:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run the test suite inside the build
+        run: docker build --target test -t iris-classifier:test .
+
+      - name: Build the runtime image
+        run: docker build --target runtime --build-arg GIT_SHA=${{ github.sha }} -t iris-classifier:ci .
+
+      - name: Report image size
+        run: |
+          size=$(docker image inspect iris-classifier:ci --format '{{.Size}}')
+          echo "Runtime image size: $((size / 1024 / 1024)) MB" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test the running container
+        run: |
+          docker run -d --name api -p 8090:8080 --read-only --tmpfs /tmp --cap-drop ALL iris-classifier:ci
+          status=starting
+          for i in $(seq 1 30); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' api)
+            if [ "$status" = "healthy" ]; then break; fi
+            sleep 2
+          done
+          echo "Health status: $status"
+          test "$status" = "healthy"
+          echo "Container user id: $(docker exec api id -u)"
+          test "$(docker exec api id -u)" != "0"
+          curl -fsS http://127.0.0.1:8090/health
+          echo
+          curl -fsS -X POST http://127.0.0.1:8090/predict \
+            -H "Content-Type: application/json" \
+            -d '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}' | tee prediction.json
+          echo
+          grep -q '"predicted_class": *"Setosa"' prediction.json
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8090/predict \
+            -H "Content-Type: application/json" -d '{"sepal_length": 5.1}')
+          echo "Status for an incomplete body: $code"
+          test "$code" = "400"
+
+      - name: Scan the image for known vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: iris-classifier:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      - name: Publish to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker tag iris-classifier:ci "$IMAGE:latest"
+          docker tag iris-classifier:ci "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+
+      - name: Show container logs if anything failed
+        if: failure()
+        run: docker logs api || true
