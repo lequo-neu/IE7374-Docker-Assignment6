@@ -3,7 +3,7 @@ services:
     build:
       context: .
       target: runtime
-    image: iris-classifier:local
+    image: penguin-classifier:local
     ports:
       - "${APP_PORT:-8090}:8080"
     read_only: true

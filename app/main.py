@@ -1,5 +1,5 @@
 """
-Flask service that serves the Iris model baked into the image.
+Flask service that serves the penguin species model baked into the image.
 
 Run in the container with gunicorn:
     gunicorn --bind 0.0.0.0:8080 "app.main:create_app()"
@@ -86,6 +86,7 @@ def create_app(model_dir: str = None) -> Flask:
     def health():
         return jsonify({
             "status": "ok",
+            "dataset": metadata["dataset"],
             "model": metadata["model"],
             "test_accuracy": metadata["test_accuracy"],
             "trained_at": metadata["trained_at"],
@@ -102,7 +103,7 @@ def create_app(model_dir: str = None) -> Flask:
         probabilities = model.predict_proba([values])[0]
         best = max(range(len(CLASSES)), key=lambda i: probabilities[i])
         return jsonify({
-            "predicted_class": CLASSES[best],
+            "predicted_species": CLASSES[best],
             "probabilities": {c: round(float(p), 4) for c, p in zip(CLASSES, probabilities)},
         })
 

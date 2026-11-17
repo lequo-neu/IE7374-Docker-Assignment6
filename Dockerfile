@@ -13,7 +13,8 @@ WORKDIR /srv
 COPY requirements.txt .
 RUN pip install -r requirements.txt && pip freeze > /srv/installed-packages.txt
 COPY app/ app/
-RUN python -m app.train --output-dir /srv/model
+COPY data/ data/
+RUN python -m app.train --data data/penguins.csv --output-dir /srv/model
 
 # Stage 2: run the test suite inside the same environment that will ship.
 # Only built when asked for with --target test.
@@ -26,8 +27,9 @@ RUN pytest -q
 # Stage 3: the image that actually runs. No compilers, no test tools, no root.
 FROM python:3.12-slim AS runtime
 ARG GIT_SHA=local
-LABEL org.opencontainers.image.title="iris-classifier" \
-      org.opencontainers.image.description="Iris classifier served with Flask and gunicorn" \
+LABEL org.opencontainers.image.title="penguin-classifier" \
+      org.opencontainers.image.description="Penguin species classifier served with Flask and gunicorn" \
+      org.opencontainers.image.authors="Quoc Hung Le" \
       org.opencontainers.image.source="https://github.com/lequo-neu/IE7374-Docker-Assignment6" \
       org.opencontainers.image.revision="${GIT_SHA}"
 RUN apt-get update \

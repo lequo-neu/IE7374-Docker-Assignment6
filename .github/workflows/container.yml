@@ -24,19 +24,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run the test suite inside the build
-        run: docker build --target test -t iris-classifier:test .
+        run: docker build --target test -t penguin-classifier:test .
 
       - name: Build the runtime image
-        run: docker build --target runtime --build-arg GIT_SHA=${{ github.sha }} -t iris-classifier:ci .
+        run: docker build --target runtime --build-arg GIT_SHA=${{ github.sha }} -t penguin-classifier:ci .
 
       - name: Report image size
         run: |
-          size=$(docker image inspect iris-classifier:ci --format '{{.Size}}')
+          size=$(docker image inspect penguin-classifier:ci --format '{{.Size}}')
           echo "Runtime image size: $((size / 1024 / 1024)) MB" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke test the running container
         run: |
-          docker run -d --name api -p 8090:8080 --read-only --tmpfs /tmp --cap-drop ALL iris-classifier:ci
+          docker run -d --name api -p 8090:8080 --read-only --tmpfs /tmp --cap-drop ALL penguin-classifier:ci
           status=starting
           for i in $(seq 1 30); do
             status=$(docker inspect --format '{{.State.Health.Status}}' api)
@@ -51,11 +51,11 @@ jobs:
           echo
           curl -fsS -X POST http://127.0.0.1:8090/predict \
             -H "Content-Type: application/json" \
-            -d '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}' | tee prediction.json
+            -d '{"bill_length_mm": 39.1, "bill_depth_mm": 18.7, "flipper_length_mm": 181, "body_mass_g": 3750}' | tee prediction.json
           echo
-          grep -q '"predicted_class": *"Setosa"' prediction.json
+          grep -q '"predicted_species": *"Adelie"' prediction.json
           code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8090/predict \
-            -H "Content-Type: application/json" -d '{"sepal_length": 5.1}')
+            -H "Content-Type: application/json" -d '{"bill_length_mm": 39.1}')
           echo "Status for an incomplete body: $code"
           test "$code" = "400"
 
@@ -65,7 +65,7 @@ jobs:
       - name: Scan the image for known vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: iris-classifier:ci
+          image-ref: penguin-classifier:ci
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
@@ -75,8 +75,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker tag iris-classifier:ci "$IMAGE:latest"
-          docker tag iris-classifier:ci "$IMAGE:${{ github.sha }}"
+          docker tag penguin-classifier:ci "$IMAGE:latest"
+          docker tag penguin-classifier:ci "$IMAGE:${{ github.sha }}"
           docker push "$IMAGE:latest"
           docker push "$IMAGE:${{ github.sha }}"
 
